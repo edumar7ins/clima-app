@@ -1,0 +1,461 @@
+# PRD - Clima
+
+## 1. Visao geral
+
+### 1.1 Nome do produto
+
+Clima
+
+### 1.2 Objetivo
+
+Permitir que uma pessoa consulte rapidamente as condicoes climaticas atuais de uma cidade informando apenas o nome do local.
+
+O produto realiza duas consultas encadeadas:
+
+1. Converte o nome da cidade em latitude, longitude, codigo do pais e fuso horario usando a API de geocodificacao do Open-Meteo.
+2. Usa latitude, longitude e fuso horario para consultar as condicoes atuais na API de previsao do Open-Meteo.
+
+Para a pessoa usuaria, o processo deve aparecer como uma unica busca, com um unico estado de carregamento.
+
+### 1.3 Publico-alvo
+
+Pessoas que precisam consultar rapidamente o clima atual de uma cidade, sem necessidade de historico, previsao estendida ou configuracao de conta.
+
+### 1.4 Escopo do MVP
+
+- Buscar uma cidade pelo nome.
+- Exibir as condicoes climaticas atuais retornadas pelo Open-Meteo.
+- Exibir estado vazio antes de qualquer busca.
+- Exibir carregamento durante as duas requisicoes.
+- Exibir estado sem resultados quando a cidade nao for localizada ou quando os dados climaticos nao puderem ser obtidos.
+- Funcionar em desktop e dispositivos moveis.
+- Nao exigir autenticacao, backend proprio ou armazenamento persistente.
+
+### 1.5 Fora do escopo do MVP
+
+- Previsao para os proximos dias ou horas.
+- Historico de buscas.
+- Favoritos.
+- Geolocalizacao automatica do dispositivo.
+- Multiplas cidades na mesma tela.
+- Alteracao manual de unidade de medida.
+- Login, conta ou sincronizacao.
+- Cache persistente ou funcionamento offline.
+
+## 2. Experiencia principal
+
+### 2.1 Fluxo de sucesso
+
+1. A pessoa abre a aplicacao e ve o estado vazio.
+2. Digita o nome de uma cidade no campo de busca.
+3. Aciona a busca pelo botao ou pela tecla Enter.
+4. A interface informa que a consulta esta em andamento.
+5. O sistema consulta a geocodificacao.
+6. Se a cidade for encontrada, o sistema consulta o clima usando os dados de localizacao retornados.
+7. A interface exibe o painel de clima atual.
+8. Uma nova busca substitui os dados exibidos pela nova cidade.
+
+### 2.2 Fluxo sem resultado
+
+Se a geocodificacao nao retornar resultados, ou se a consulta climatica falhar ou retornar dados incompletos, a interface deve voltar para um estado sem resultado com uma mensagem objetiva. A aplicacao nao deve exibir valores parciais como se fossem dados validos.
+
+### 2.3 Fluxo de entrada invalida
+
+- Campo vazio: nao iniciar requisicao.
+- Texto composto apenas por espacos: tratar como campo vazio.
+- Espacos no inicio e no fim: remover antes da requisicao.
+- Texto valido, mas inexistente: exibir sem resultado.
+
+## 3. Requisitos funcionais
+
+### RF-01 - Estado vazio
+
+Ao carregar a aplicacao sem uma busca realizada, exibir uma area de estado vazio que indique que a pessoa deve pesquisar uma cidade. O estado vazio nao deve simular dados climaticos.
+
+### RF-02 - Campo de busca
+
+A area superior deve conter:
+
+- Um campo de texto para o nome da cidade.
+- Um botao de busca claramente identificavel.
+- Label acessivel, visivel ou associada ao campo.
+- Suporte a envio com Enter.
+
+O valor digitado deve ser normalizado com `trim()` antes da consulta.
+
+### RF-03 - Busca de localizacao
+
+A aplicacao deve chamar:
+
+`https://geocoding-api.open-meteo.com/v1/search?name={NOME_DA_CIDADE}&count=1&language=pt&format=json`
+
+O nome deve ser codificado como parametro de URL. A aplicacao deve considerar apenas o primeiro resultado, conforme `count=1`.
+
+Campos necessarios do resultado:
+
+- `name`
+- `latitude`
+- `longitude`
+- `country_code`
+- `timezone`
+
+Se a resposta nao possuir `results` ou se `results` estiver vazio, a busca deve ser considerada sem resultado.
+
+### RF-04 - Busca climatica
+
+Com os dados de localizacao, a aplicacao deve chamar a API de previsao do Open-Meteo usando latitude, longitude e timezone.
+
+Endpoint base:
+
+`https://api.open-meteo.com/v1/forecast`
+
+Parametros obrigatorios:
+
+- `latitude`
+- `longitude`
+- `current=precipitation_probability,temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,wind_speed_10m,wind_direction_10m,weather_code`
+- `timezone`
+
+O parametro `hourly=temperature_2m` pode ser omitido no MVP, pois nenhum dado horario sera exibido. Caso seja mantido, ele nao deve alterar o comportamento da interface.
+
+### RF-05 - Validacao de resposta climatica
+
+A aplicacao deve validar a existencia de `current` e `current_units` antes de exibir o resultado.
+
+Os dados obrigatorios em `current` sao:
+
+- `temperature_2m`
+- `relative_humidity_2m`
+- `apparent_temperature`
+- `is_day`
+- `wind_speed_10m`
+- `wind_direction_10m`
+- `precipitation_probability`
+- `weather_code`
+- `time`
+
+Caso qualquer dado essencial esteja ausente ou invalido, tratar como sem resultado.
+
+### RF-06 - Painel de clima
+
+A tela de sucesso deve ser dividida em uma barra lateral e uma area principal.
+
+A barra lateral deve exibir:
+
+- Temperatura atual.
+- Nome da cidade.
+- Codigo do pais.
+- Data ou referencia temporal da leitura.
+- Indicacao de dia ou noite baseada em `is_day`.
+- Descricao do clima baseada em `weather_code`.
+
+A area principal deve exibir:
+
+- Humidade relativa.
+- Temperatura aparente.
+- Probabilidade de precipitacao.
+- Velocidade do vento.
+- Direcao do vento.
+
+Cada valor deve usar a unidade retornada em `current_units`, em vez de assumir unidades fixas na camada de exibicao.
+
+### RF-07 - Interpretacao do weather code
+
+Usar a seguinte tabela de apresentacao:
+
+| Codigo | Descricao |
+| --- | --- |
+| 0 | Ceu limpo |
+| 1, 2, 3 | Parcialmente nublado, variando ou encoberto |
+| 45, 48 | Nevoeiro |
+| 51, 53, 55 | Chuvisco leve, moderado ou intenso |
+| 61, 63, 65 | Chuva fraca, moderada ou intensa |
+| 71, 73, 75 | Neve fraca, moderada ou intensa |
+| 80, 81, 82 | Pancadas de chuva fracas, moderadas ou fortes |
+| 95 | Tempestade leve ou moderada |
+| 96, 99 | Tempestade com granizo |
+
+Para codigos nao mapeados, exibir uma descricao generica como `Condicao desconhecida`, sem interromper a apresentacao dos demais dados.
+
+### RF-08 - Dia, noite e data
+
+- `is_day = 1`: exibir Dia.
+- `is_day = 0`: exibir Noite.
+- Usar `current.time` e o `timezone` retornado para apresentar a referencia temporal local da cidade.
+- A formatacao visual deve respeitar o idioma portugues e ser consistente em toda a aplicacao.
+
+### RF-09 - Carregamento
+
+Durante toda a busca encadeada:
+
+- Exibir um indicador de carregamento.
+- Desabilitar o envio de novas buscas para evitar requisicoes concorrentes acidentais.
+- Preservar o contexto da busca atual ou limpar a area de dados conforme a implementacao visual escolhida, sem exibir dados novos antes da validacao completa.
+- Restaurar os controles ao terminar, com sucesso ou erro.
+
+### RF-10 - Erros e sem resultado
+
+Erros de rede, respostas HTTP nao bem-sucedidas, JSON invalido, cidade inexistente ou dados climaticos incompletos devem resultar em um estado sem resultado compreensivel para a pessoa usuaria.
+
+A camada de API deve retornar um resultado controlado ou uma falha tratavel. Detalhes tecnicos da excecao nao devem aparecer na interface.
+
+## 4. Requisitos nao funcionais
+
+### RNF-01 - Tecnologia
+
+- Vite.
+- TypeScript.
+- JavaScript vanilla, sem framework de interface.
+- API nativa `fetch` para requisicoes.
+
+### RNF-02 - Separacao de responsabilidades
+
+As requisicoes ao Open-Meteo devem ficar em um modulo proprio, por exemplo `src/services/openMeteo.ts`. A interface nao deve montar URLs nem chamar a API diretamente.
+
+Separar, no minimo:
+
+- Tipos das respostas e do modelo de dominio.
+- Funcoes de geocodificacao e clima.
+- Estado e fluxo da tela.
+- Renderizacao e estilos.
+
+### RNF-03 - Seguranca e robustez
+
+- Codificar os parametros de URL com `URLSearchParams` ou `URL`.
+- Validar os campos necessarios antes de usa-los.
+- Nao inserir texto digitado pelo usuario em HTML sem escapar ou sem uma estrategia segura de renderizacao.
+- Nao depender de chave de API, pois os endpoints definidos sao publicos.
+- Definir um tratamento consistente para timeout ou indisponibilidade de rede.
+
+### RNF-04 - Desempenho
+
+- Fazer somente as duas requisicoes necessarias por busca.
+- Nao iniciar requisicao para entrada vazia.
+- Evitar renderizacoes desnecessarias durante o carregamento.
+- Manter a interface utilizavel em conexoes lentas, com feedback imediato de carregamento.
+
+### RNF-05 - Acessibilidade
+
+- Usar elementos semanticos de formulario, botao, cabecalhos e listas.
+- Garantir foco visivel no campo e no botao.
+- Associar mensagens de carregamento e erro a uma regiao com `aria-live` quando apropriado.
+- Nao depender apenas de cor para indicar dia/noite, erro ou estado.
+- Garantir contraste suficiente entre texto, fundo e controles.
+- Permitir todo o fluxo sem mouse.
+
+### RNF-06 - Responsividade
+
+Em telas largas, sidebar e area principal devem aparecer lado a lado dentro do painel central. Em telas estreitas, devem se reorganizar verticalmente sem perda de informacao, cortes ou rolagem horizontal.
+
+## 5. Arquitetura tecnica sugerida
+
+### 5.1 Modelo de dominio
+
+Criar um modelo interno estavel para a interface, sem obrigar os componentes de apresentacao a conhecer toda a resposta da API.
+
+Exemplo de dados normalizados:
+
+```ts
+type Location = {
+  name: string
+  latitude: number
+  longitude: number
+  countryCode: string
+  timezone: string
+}
+
+type CurrentWeather = {
+  temperature: number
+  humidity: number
+  apparentTemperature: number
+  isDay: boolean
+  windSpeed: number
+  windDirection: number
+  precipitationProbability: number
+  weatherCode: number
+  time: string
+  units: {
+    temperature: string
+    humidity: string
+    apparentTemperature: string
+    windSpeed: string
+    windDirection: string
+    precipitationProbability: string
+  }
+}
+```
+
+### 5.2 Modulo Open-Meteo
+
+O modulo de integracao deve expor funcoes de alto nivel, por exemplo:
+
+- `searchLocation(cityName)`
+- `getCurrentWeather(location)`
+
+Responsabilidades do modulo:
+
+- Validar parametros de entrada.
+- Montar URLs.
+- Fazer `fetch`.
+- Verificar status HTTP.
+- Converter JSON para tipos conhecidos.
+- Retornar ausencia de resultado de maneira previsivel.
+
+A pagina ou o modulo de UI deve apenas orquestrar as duas funcoes.
+
+### 5.3 Estado da tela
+
+Representar explicitamente estados equivalentes a:
+
+- `empty`
+- `loading`
+- `success`
+- `no-results`
+
+Uma busca nova deve invalidar o resultado anterior apenas quando a nova operacao estiver pronta para atualizar a tela, evitando que uma resposta antiga substitua uma busca mais recente.
+
+### 5.4 Fluxo de dados
+
+```text
+Entrada da cidade
+  -> normalizacao e validacao
+  -> searchLocation
+  -> validacao da localizacao
+  -> getCurrentWeather
+  -> validacao e normalizacao do clima
+  -> renderizacao do painel
+```
+
+## 6. Diretrizes visuais
+
+### 6.1 Direcao visual
+
+A interface deve transmitir clareza, tranquilidade e leitura rapida de dados. O fundo geral deve ser cinza escuro, enquanto o painel de conteudo deve ser branco, centralizado e visualmente destacado.
+
+### 6.2 Estrutura
+
+- Area superior centralizada, fora do painel branco, contendo apenas o campo de busca e o botao.
+- Painel principal com largura maxima de aproximadamente 800px.
+- Painel principal com bordas bem arredondadas.
+- Painel dividido entre sidebar esquerda e area de metricas.
+- Em mobile, o painel deve ocupar a largura disponivel com margens internas confortaveis.
+
+### 6.3 Sidebar
+
+A sidebar deve funcionar como resumo visual da cidade:
+
+- Dar destaque tipografico a temperatura.
+- Mostrar cidade e codigo do pais proximos da temperatura.
+- Mostrar o contexto temporal local.
+- Diferenciar visualmente Dia e Noite, mantendo uma leitura acessivel.
+- Exibir a descricao textual do weather code.
+
+### 6.4 Area principal
+
+As metricas devem ser organizadas em blocos de leitura rapida, com:
+
+- Nome da metrica.
+- Valor em destaque.
+- Unidade visivel.
+- Icone ou elemento visual auxiliar apenas quando contribuir para a compreensao.
+
+Nao usar cards aninhados. Os blocos de metricas podem ter separadores sutis, fundo leve ou bordas discretas, desde que o painel continue sendo uma composicao unica.
+
+### 6.5 Estados visuais
+
+- Estado vazio: composicao simples, com convite para pesquisar.
+- Loading: indicador discreto e texto de status; preservar o layout para evitar saltos.
+- Sucesso: painel completo com hierarquia clara entre resumo e metricas.
+- Sem resultado: mensagem direta e orientacao para tentar outra cidade.
+- Erro de rede: mensagem generica, sem stack trace ou detalhes internos.
+
+### 6.6 Tipografia e cores
+
+- Usar uma familia tipografica legivel e consistente.
+- Reservar o maior tamanho para a temperatura principal.
+- Usar contraste alto no painel branco.
+- Usar o cinza escuro como ambiente, sem tornar o texto secundario ilegivel.
+- Evitar depender de uma unica cor para comunicar todos os estados.
+- Manter raio de borda consistente entre campo, botao e painel, com o painel podendo ser mais arredondado que os controles.
+
+## 7. Criterios de aceite
+
+### CA-01 - Primeira abertura
+
+Dado que a aplicacao foi aberta sem busca anterior, quando a tela carregar, entao o estado vazio deve ser exibido e nenhuma chamada ao Open-Meteo deve ser feita.
+
+### CA-02 - Busca valida
+
+Dado que a pessoa informou uma cidade valida, quando enviar o formulario, entao a aplicacao deve realizar a geocodificacao e, encontrando a cidade, realizar a consulta climatica e exibir os dados atuais.
+
+### CA-03 - Dados apresentados
+
+Dado que a consulta climatica foi concluida, entao devem aparecer temperatura, cidade, codigo do pais, data ou hora local, estado dia/noite, descricao do weather code, humidade, temperatura aparente, probabilidade de precipitacao, velocidade e direcao do vento.
+
+### CA-04 - Unidade correta
+
+Dado que a API retornou `current_units`, entao cada valor exibido deve usar a unidade correspondente da resposta.
+
+### CA-05 - Cidade nao encontrada
+
+Dado que a geocodificacao retornou zero resultados, quando a busca terminar, entao a aplicacao deve exibir o estado sem resultado e nao deve chamar o endpoint de clima.
+
+### CA-06 - Clima indisponivel
+
+Dado que a cidade foi localizada, mas a resposta climatica falhou ou esta incompleta, quando a busca terminar, entao a aplicacao deve exibir o estado sem resultado e nao deve exibir dados parciais.
+
+### CA-07 - Carregamento
+
+Dado que qualquer uma das duas requisicoes esta em andamento, entao o usuario deve ver o estado de carregamento e nao deve conseguir iniciar uma segunda busca concorrente pelo mesmo formulario.
+
+### CA-08 - Entrada vazia
+
+Dado que o campo esta vazio ou contem apenas espacos, quando o formulario for enviado, entao nenhuma requisicao deve ser feita e a pessoa deve receber orientacao para informar uma cidade.
+
+### CA-09 - Responsividade
+
+Dado que a aplicacao seja aberta em uma tela estreita, entao os dados devem permanecer legiveis, reorganizados verticalmente e sem rolagem horizontal.
+
+### CA-10 - Acessibilidade
+
+Dado que a pessoa navegue usando apenas teclado, entao deve conseguir preencher o campo, enviar a busca, acompanhar o estado e ler o resultado ou mensagem de erro.
+
+## 8. Testes recomendados
+
+### Testes unitarios
+
+- Normalizacao do nome da cidade.
+- Montagem dos parametros das URLs.
+- Validacao de localizacao sem resultados.
+- Validacao de clima incompleto.
+- Conversao dos codigos meteorologicos em descricoes.
+- Conversao de `is_day` para Dia ou Noite.
+- Normalizacao do modelo da API para o modelo da interface.
+
+### Testes de integracao
+
+- Busca com sucesso nas duas etapas.
+- Cidade inexistente sem chamada climatica.
+- Falha na geocodificacao.
+- Falha na consulta climatica.
+- Resposta HTTP nao bem-sucedida.
+- Submissao com campo vazio.
+
+### Verificacao manual de interface
+
+- Desktop em viewport larga.
+- Mobile em viewport estreita.
+- Navegacao por teclado.
+- Foco visivel.
+- Mensagens de carregamento e erro.
+- Textos longos de cidade sem quebrar o layout.
+- Codigos meteorologicos de todas as faixas especificadas.
+
+## 9. Observacoes e premissas
+
+- A fonte de verdade para localizacao e clima e o Open-Meteo.
+- O idioma da geocodificacao sera portugues (`language=pt`), mas a interface tambem deve traduzir labels e descricoes meteorologicas.
+- O codigo do pais sera exibido no formato retornado pela API, preferencialmente em letras maiusculas.
+- A data e a hora devem refletir o fuso horario da cidade, usando `timezone` e `current.time` da resposta.
+- A ausencia de dados deve ser tratada como um estado de produto, nao como erro tecnico exposto.
+- A primeira implementacao pode usar a estrutura atual de `src/main.ts` e `src/style.css`, removendo o conteudo de demonstracao do starter do Vite.
