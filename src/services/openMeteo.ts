@@ -49,17 +49,31 @@ export async function searchLocation(cityName: string): Promise<Location | null>
     format: 'json',
   })
 
-  const response = await fetch(`${GEOCODING_BASE_URL}?${params.toString()}`)
+  let response: Response
+
+  try {
+    response = await fetch(`${GEOCODING_BASE_URL}?${params.toString()}`)
+  } catch {
+    return null
+  }
 
   if (!response.ok) {
     return null
   }
 
-  const payload = (await response.json()) as GeocodingResponse
+  let payload: GeocodingResponse
+
+  try {
+    payload = (await response.json()) as GeocodingResponse
+  } catch {
+    return null
+  }
+
   const result = payload.results?.[0]
 
   if (!result || !result.name || typeof result.latitude !== 'number' ||
-      typeof result.longitude !== 'number' || !result.country_code || !result.timezone) {
+      !Number.isFinite(result.latitude) || typeof result.longitude !== 'number' ||
+      !Number.isFinite(result.longitude) || !result.country_code || !result.timezone) {
     return null
   }
 
@@ -73,6 +87,10 @@ export async function searchLocation(cityName: string): Promise<Location | null>
 }
 
 export async function getCurrentWeather(location: Location): Promise<CurrentWeather | null> {
+  if (!location.timezone || !Number.isFinite(location.latitude) || !Number.isFinite(location.longitude)) {
+    return null
+  }
+
   const params = new URLSearchParams({
     latitude: String(location.latitude),
     longitude: String(location.longitude),
@@ -81,13 +99,25 @@ export async function getCurrentWeather(location: Location): Promise<CurrentWeat
       'precipitation_probability,temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,wind_speed_10m,wind_direction_10m,weather_code',
   })
 
-  const response = await fetch(`${WEATHER_BASE_URL}?${params.toString()}`)
+  let response: Response
+
+  try {
+    response = await fetch(`${WEATHER_BASE_URL}?${params.toString()}`)
+  } catch {
+    return null
+  }
 
   if (!response.ok) {
     return null
   }
 
-  const payload = (await response.json()) as WeatherResponse
+  let payload: WeatherResponse
+
+  try {
+    payload = (await response.json()) as WeatherResponse
+  } catch {
+    return null
+  }
 
   if (!payload.current || !payload.current_units) {
     return null
@@ -105,10 +135,14 @@ export async function getCurrentWeather(location: Location): Promise<CurrentWeat
     wind_direction_10m: current.wind_direction_10m,
     precipitation_probability: current.precipitation_probability,
     weather_code: current.weather_code,
-    time: current.time,
   }
 
-  if (Object.values(requiredCurrentValues).some((value) => value === undefined || value === null || Number.isNaN(Number(value)))) {
+  if (Object.values(requiredCurrentValues).some((value) => value === undefined || value === null || Number.isNaN(Number(value))) ||
+      !Number.isFinite(Number(current.temperature_2m)) || !Number.isFinite(Number(current.relative_humidity_2m)) ||
+      !Number.isFinite(Number(current.apparent_temperature)) || !Number.isFinite(Number(current.wind_speed_10m)) ||
+      !Number.isFinite(Number(current.wind_direction_10m)) || !Number.isFinite(Number(current.precipitation_probability)) ||
+      !Number.isFinite(Number(current.weather_code)) || (current.is_day !== 0 && current.is_day !== 1) ||
+      typeof current.time !== 'string' || !current.time) {
     return null
   }
 
@@ -121,7 +155,7 @@ export async function getCurrentWeather(location: Location): Promise<CurrentWeat
     precipitationProbability: units.precipitation_probability,
   }
 
-  if (Object.values(requiredUnits).some((value) => typeof value !== 'string' || value.length === 0)) {
+  if (Object.values(requiredUnits).some((value) => typeof value !== 'string' || value.trim().length === 0)) {
     return null
   }
 

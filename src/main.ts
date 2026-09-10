@@ -108,7 +108,7 @@ function renderContent(): string {
       const safeCity = escapeHtml(currentLocation.name)
       const safeCountry = escapeHtml(currentLocation.countryCode)
       const safeTemperature = escapeHtml(`${currentWeather.temperature}${currentWeather.units.temperature}`)
-      const safeTime = escapeHtml(formatLocalDateTime(currentWeather.time))
+      const safeTime = escapeHtml(formatLocalDateTime(currentWeather.time, currentLocation.timezone))
       const safeDescription = escapeHtml(getWeatherDescription(currentWeather.weatherCode))
       const safeHumidity = escapeHtml(`${currentWeather.humidity}${currentWeather.units.humidity}`)
       const safeApparent = escapeHtml(`${currentWeather.apparentTemperature}${currentWeather.units.apparentTemperature}`)

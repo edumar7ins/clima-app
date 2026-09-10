@@ -66,20 +66,47 @@ export function getDayPhaseLabel(isDay: boolean): string {
   return isDay ? 'Dia' : 'Noite'
 }
 
-export function formatLocalDateTime(time: string): string {
-  if (!time) {
+export function formatLocalDateTime(time: string, timezone: string): string {
+  const match = time.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/)
+
+  if (!match) {
     return 'Data indisponivel'
   }
 
-  const normalizedTime = time.includes('T') ? time : `${time.slice(0, 10)}T${time.slice(11) ?? '00:00'}`
-  const parsed = new Date(`${normalizedTime}:00`)
+  try {
+    const [, year, month, day, hour, minute, second = '00'] = match
+    const localTimestamp = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second))
+    const timezoneFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+    const parts = Object.fromEntries(
+      timezoneFormatter.formatToParts(new Date(localTimestamp))
+        .filter(({ type }) => type !== 'literal')
+        .map(({ type, value }) => [type, value]),
+    )
+    const timezoneTimestamp = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second),
+    )
+    const adjustedTimestamp = new Date(localTimestamp - (timezoneTimestamp - localTimestamp))
 
-  if (Number.isNaN(parsed.getTime())) {
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+      timeZone: timezone,
+    }).format(adjustedTimestamp)
+  } catch {
     return 'Data indisponivel'
   }
-
-  return new Intl.DateTimeFormat('pt-BR', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(parsed)
 }
