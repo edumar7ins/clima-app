@@ -5,6 +5,11 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>clima</title>
+    <script>
+      if (location.protocol === 'file:' && !location.pathname.includes('/dist/')) {
+        location.replace('./dist/index.html')
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>

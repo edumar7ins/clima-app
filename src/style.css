@@ -91,8 +91,12 @@ input:disabled {
 .search-form input:focus-visible,
 .search-form button:focus-visible,
 .metric:focus-within {
-  outline: 3px solid #fbbf24;
+  outline: 3px solid #fddf91;
   outline-offset: 2px;
+}
+
+.search-form input:focus-visible {
+  border-radius: 999px 0 0 999px;
 }
 
 .search-form button {
